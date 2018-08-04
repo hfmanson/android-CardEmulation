@@ -19,6 +19,7 @@
           package="com.example.android.cardemulation.tests"
           android:versionCode="1"
           android:versionName="1.0">
+    <uses-permission android:name="org.simalliance.openmobileapi.SMARTCARD"></uses-permission>
 
     <!-- Min/target SDK versions (<uses-sdk>) managed by build.gradle -->
 
@@ -27,6 +28,7 @@
          which is needed when building test cases. -->
     <application>
         <uses-library android:name="android.test.runner" />
+        <uses-library android:name="org.simalliance.openmobileapi" android:required="true"/>
     </application>
 
     <!--

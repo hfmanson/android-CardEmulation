@@ -24,11 +24,13 @@
     <!-- Min/target SDK versions (<uses-sdk>) managed by build.gradle -->
     <uses-feature android:name="android.hardware.nfc.hce" android:required="true" />
     <uses-permission android:name="android.permission.NFC" />
+    <uses-permission android:name="org.simalliance.openmobileapi.SMARTCARD"></uses-permission>
 
     <application android:allowBackup="true"
         android:label="@string/app_name"
         android:icon="@drawable/ic_launcher"
         android:theme="@style/AppTheme">
+        <uses-library android:name="org.simalliance.openmobileapi" android:required="true"/>
 
         <!-- Basic UI for sample discoverability. -->
         <activity android:name=".MainActivity"

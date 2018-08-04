@@ -91,6 +91,14 @@ public class CardService extends HostApduService {
             byte[] accountBytes = account.getBytes();
             Log.i(TAG, "Sending account number: " + account);
             return ConcatArrays(accountBytes, SELECT_OK_SW);
+        } else if (commandApdu[0] == (byte) 0x00) { // CLA
+            byte command = commandApdu[1];
+            Log.i(TAG, "got command: " + command);
+            switch (command) {
+                case 0x10:
+                    break;
+            }
+            return ConcatArrays(commandApdu, SELECT_OK_SW);
         } else {
             return UNKNOWN_CMD_SW;
         }

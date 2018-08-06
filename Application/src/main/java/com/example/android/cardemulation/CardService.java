@@ -46,11 +46,17 @@ public class CardService extends HostApduService {
     // Format: [Class | Instruction | Parameter 1 | Parameter 2]
     private static final String SELECT_APDU_HEADER = "00A40400";
     // "OK" status word sent in response to SELECT AID command (0x9000)
-    private static final byte[] SELECT_OK_SW = HexStringToByteArray("9000");
+    public static final byte[] SELECT_OK_SW = HexStringToByteArray("9000");
     // "UNKNOWN" status word sent in response to invalid APDU command (0x0000)
     private static final byte[] UNKNOWN_CMD_SW = HexStringToByteArray("0000");
     private static final byte[] SELECT_APDU = BuildSelectApdu(SAMPLE_LOYALTY_CARD_AID);
+    private IsoAppletHandler mIsoAppletHandler;
 
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        Log.i(TAG, "onCreate()");
+    }
     /**
      * Called if the connection to the NFC card is lost, in order to let the application know the
      * cause for the disconnection (either a lost link, or another AID being selected by the
@@ -59,7 +65,13 @@ public class CardService extends HostApduService {
      * @param reason Either DEACTIVATION_LINK_LOSS or DEACTIVATION_DESELECTED
      */
     @Override
-    public void onDeactivated(int reason) { }
+    public void onDeactivated(int reason) {
+        Log.i(TAG, "onDeactivated(" + reason + ")");
+        if (mIsoAppletHandler != null) {
+            mIsoAppletHandler.teardown();
+            mIsoAppletHandler = null;
+        }
+    }
 
     /**
      * This method will be called when a command APDU has been received from a remote device. A
@@ -98,7 +110,13 @@ public class CardService extends HostApduService {
                 case 0x10:
                     break;
             }
-            return ConcatArrays(commandApdu, SELECT_OK_SW);
+            byte[] response = null;
+            if (mIsoAppletHandler == null) {
+                mIsoAppletHandler = new IsoAppletHandler(this);
+            } else {
+                response = mIsoAppletHandler.responseAPDU();
+            }
+            return response;
         } else {
             return UNKNOWN_CMD_SW;
         }

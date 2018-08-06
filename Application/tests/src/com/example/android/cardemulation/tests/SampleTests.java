@@ -34,16 +34,7 @@ import com.example.android.cardemulation.*;
 
 import android.test.ActivityInstrumentationTestCase2;
 
-import org.opensc.pkcs15.AIDs;
-import org.opensc.pkcs15.application.Application;
-import org.opensc.pkcs15.application.ApplicationFactory;
-import org.opensc.pkcs15.application.impl.ApplicationFactoryImpl;
-import org.opensc.pkcs15.token.Token;
-
 import java.io.IOException;
-import java.util.List;
-
-import nl.mansoft.pkcs15.token.impl.IsoAppletToken;
 
 /**
 * Tests for CardEmulation sample.
@@ -177,18 +168,15 @@ public class SampleTests extends ActivityInstrumentationTestCase2<MainActivity> 
             assertEquals(expectedResult[i], result[i]);
         }
     }
-/*
+
     public void testPKCS15() throws IOException{
-        final ApplicationFactoryImpl applicationFactory = new ApplicationFactoryImpl();
+//        final ApplicationFactoryImpl applicationFactory = new ApplicationFactoryImpl();
 
-        Token token = new IsoAppletToken(mTestActivity.getSmartcardIO());
-        List<Application> apps = applicationFactory.listApplications(token);
-        assertNotNull(apps);
-        assertEquals(1,apps.size());
-        Application app = apps.get(0);
-        assertEquals(AIDs.PKCS15_AID, app.getAID());
-
-
+//        List<Application> apps = applicationFactory.listApplications(token);
+//        assertNotNull(apps);
+//        assertEquals(1,apps.size());
+//        Application app = apps.get(0);
+//        assertEquals(AIDs.PKCS15_AID, app.getAID());
+        new IsoAppletHandler(mTestActivity);
     }
-*/
 }

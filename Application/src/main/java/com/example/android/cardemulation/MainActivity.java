@@ -29,27 +29,6 @@ import com.example.android.common.logger.LogFragment;
 import com.example.android.common.logger.LogWrapper;
 import com.example.android.common.logger.MessageOnlyLogFilter;
 
-import org.opensc.pkcs15.application.Application;
-import org.opensc.pkcs15.application.impl.ApplicationFactoryImpl;
-import org.opensc.pkcs15.asn1.PKCS15Certificate;
-import org.opensc.pkcs15.asn1.PKCS15Objects;
-import org.opensc.pkcs15.asn1.sequence.SequenceOf;
-import org.opensc.pkcs15.token.PathHelper;
-import org.opensc.pkcs15.token.Token;
-import org.opensc.pkcs15.token.TokenContext;
-import org.opensc.pkcs15.token.TokenPath;
-import org.simalliance.openmobileapi.SEService;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.security.cert.Certificate;
-import java.security.cert.CertificateParsingException;
-import java.util.List;
-
-import nl.mansoft.openmobileapi.util.ResponseApdu;
-import nl.mansoft.pkcs15.token.impl.IsoAppletToken;
-import nl.mansoft.util.SmartcardIO;
-
 /**
  * A simple launcher activity containing a summary sample description, sample log and a custom
  * {@link android.support.v4.app.Fragment} which can display a view.
@@ -60,68 +39,14 @@ import nl.mansoft.util.SmartcardIO;
 public class MainActivity extends SampleActivityBase {
 
     public static final String TAG = "MainActivity";
-    public final static byte[] AID_ISOAPPLET = { (byte) 0xF2, (byte) 0x76, (byte) 0xA2, (byte) 0x88, (byte) 0xBC, (byte) 0xFB, (byte) 0xA6, (byte) 0x9D, (byte) 0x34, (byte) 0xF3, (byte) 0x10, (byte) 0x01 };
-
-    private class Callback implements SEService.CallBack {
-        //@Override
-        public void serviceConnected(SEService seService) {
-            try {
-                mSmartcardIO.setSession();
-                mSmartcardIO.openChannel(AID_ISOAPPLET);
-                ResponseApdu resp = mSmartcardIO.login(new byte[] { 0x31, 0x32, 0x33, 0x34});
-                onReady();
-            } catch (IOException e) {
-                Log.e(TAG, e.getMessage());
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
 
     // Whether the Log Fragment is currently shown
     private boolean mLogShown;
-    private SmartcardIO mSmartcardIO;
 
-    private void testCertificates(PKCS15Objects objs) {
-        SequenceOf<PKCS15Certificate> cerficates = objs.getCertificates();
-        List<PKCS15Certificate> list = cerficates.getSequence();
-        for (PKCS15Certificate pkcs15certificate : list) {
-            try {
-                Certificate certificate = pkcs15certificate.getSpecificCertificateAttributes().getCertificateObject().getCertificate();
-                Log.i(TAG, certificate.toString());
-            } catch (CertificateParsingException ex) {
-            }
-        }
-    }
-
-    private void onReady() {
-        final ApplicationFactoryImpl applicationFactory = new ApplicationFactoryImpl();
-
-        Token token = new IsoAppletToken(mSmartcardIO);
-        List<Application> apps = null;
-        try {
-            apps = applicationFactory.listApplications(token);
-            Application app = apps.get(0);
-            PathHelper.selectDF(token,new TokenPath(app.getApplicationTemplate().getPath()));
-            token.selectEF(0x5031);
-            PKCS15Objects objs = PKCS15Objects.readInstance(token.readEFData(), new TokenContext(token));
-            testCertificates(objs);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-    }
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        mSmartcardIO = new SmartcardIO();
-        try {
-            mSmartcardIO.setup(this, new Callback());
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
         if (savedInstanceState == null) {
             FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
             CardEmulationFragment fragment = new CardEmulationFragment();

@@ -16,12 +16,18 @@ import org.opensc.pkcs15.token.TokenContext;
 import org.opensc.pkcs15.token.TokenPath;
 import org.simalliance.openmobileapi.SEService;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateParsingException;
 import java.security.cert.X509Certificate;
+import java.util.Enumeration;
 import java.util.List;
 
 import nl.mansoft.openmobileapi.util.ResponseApdu;
@@ -34,9 +40,17 @@ public class IsoAppletHandler implements SEService.CallBack {
     private SmartcardIO mSmartcardIO;
     private CardService mCardService;
     private PKCS15Objects mPKCS15Objects;
+    private X509Certificate mKeyCertificate;
+    private X509Certificate mCaCertificate;
+    private int mLockCertificateCount;
+    private X509Certificate[] mLockCertificates;
+    public static final String KEYSTORE_FILENAME = "keystore";
 
     public IsoAppletHandler(Context context) {
+
         mSmartcardIO = new SmartcardIO();
+        mLockCertificates = new X509Certificate[10];
+        mLockCertificateCount = 0;
         try {
             mSmartcardIO.setup(context, this);
             mCardService = (CardService) context;
@@ -53,37 +67,14 @@ public class IsoAppletHandler implements SEService.CallBack {
         return md.digest();
     }
 
-    private byte[] testCertificates() {
-        SequenceOf<PKCS15Certificate> certificates = mPKCS15Objects.getCertificates();
-        List<PKCS15Certificate> list = certificates.getSequence();
-        PKCS15Certificate pkcs15certificate = list.get(0);
-        try {
-            CommonObjectAttributes commonObjectAttributes = pkcs15certificate.getCommonObjectAttributes();
-            String label = commonObjectAttributes.getLabel();
-            Log.i(TAG, label);
-            X509Certificate certificate = (X509Certificate) pkcs15certificate.getSpecificCertificateAttributes().getCertificateObject().getCertificate();
-            Log.i(TAG, certificate.toString());
-            byte[] thumbprint = getThumbprint(certificate);
-            Log.i(TAG, SmartcardIO.hex(thumbprint));
-            return thumbprint;
-        } catch (CertificateParsingException ex) {
-        } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
-        } catch (CertificateEncodingException e) {
-            e.printStackTrace();
-        }
-        return null;
-    }
-
-    public byte[] responseAPDU() {
+    public byte[] responseAPDU() throws CertificateEncodingException, NoSuchAlgorithmException {
         Log.i(TAG, "responseAPDU()");
-        byte[] thumbprint = testCertificates();
+        byte[] thumbprint = getThumbprint(mKeyCertificate);
+        Log.i(TAG, SmartcardIO.hex(thumbprint));
         return CardService.ConcatArrays(thumbprint, CardService.SELECT_OK_SW);
     }
 
-    @Override
-    public void serviceConnected(SEService seService) {
-        Log.i(TAG, "serviceConnected()");
+    public void readCertificatesFromSimToKeystore(KeyStore ks) {
         try {
             mSmartcardIO.setSession();
             mSmartcardIO.openChannel(AID_ISOAPPLET);
@@ -98,12 +89,62 @@ public class IsoAppletHandler implements SEService.CallBack {
                 PathHelper.selectDF(token,new TokenPath(app.getApplicationTemplate().getPath()));
                 token.selectEF(0x5031);
                 mPKCS15Objects = PKCS15Objects.readInstance(token.readEFData(), new TokenContext(token));
-                mCardService.sendResponseApdu(responseAPDU());
+                SequenceOf<PKCS15Certificate> certificates = mPKCS15Objects.getCertificates();
+                List<PKCS15Certificate> list = certificates.getSequence();
+                for (PKCS15Certificate pkcs15certificate  : list) {
+                    try {
+                        CommonObjectAttributes commonObjectAttributes = pkcs15certificate.getCommonObjectAttributes();
+                        String label = commonObjectAttributes.getLabel();
+                        Log.i(TAG, label);
+                        X509Certificate certificate = (X509Certificate) pkcs15certificate.getSpecificCertificateAttributes().getCertificateObject().getCertificate();
+                        Log.i(TAG, certificate.toString());
+                        ks.setCertificateEntry(label, certificate);
+                    } catch (CertificateParsingException ex) {
+                    }
+                }
             } catch (IOException e) {
                 e.printStackTrace();
             }
         } catch (IOException e) {
             Log.e(TAG, e.getMessage());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void printAliases(KeyStore ks) throws KeyStoreException {
+        Enumeration<String> aliases = ks.aliases();
+        while (aliases.hasMoreElements()) {
+            String alias = aliases.nextElement();
+            Log.i(TAG, alias);
+        }
+    }
+
+    @Override
+    public void serviceConnected(SEService seService) {
+        Log.i(TAG, "serviceConnected()");
+        try {
+            KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+            try {
+                FileInputStream fis = mCardService.openFileInput(KEYSTORE_FILENAME);
+                Log.i(TAG, "reading keystore file");
+                ks.load(fis, null);
+                fis.close();
+            } catch (FileNotFoundException ex) {
+                Log.i(TAG, "creating keystore file");
+                FileOutputStream fos = mCardService.openFileOutput(KEYSTORE_FILENAME, Context.MODE_PRIVATE);
+                ks.load(null);
+                readCertificatesFromSimToKeystore(ks);
+                ks.store(fos, null);
+                fos.close();
+            }
+            printAliases(ks);
+            mKeyCertificate = (X509Certificate) ks.getCertificate("keycert");
+            mCaCertificate = (X509Certificate) ks.getCertificate("CA");
+            mCardService.sendResponseApdu(responseAPDU());
+            //mLockCertificates[mLockCertificateCount++] = certificate;
+            //byte[] thumbprint = getThumbprint(certificate);
+            //Log.i(TAG, SmartcardIO.hex(thumbprint));
         } catch (Exception e) {
             e.printStackTrace();
         }

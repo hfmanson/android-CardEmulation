@@ -20,6 +20,8 @@ import android.nfc.cardemulation.HostApduService;
 import android.os.Bundle;
 import com.example.android.common.logger.Log;
 
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateEncodingException;
 import java.util.Arrays;
 
 /**
@@ -46,9 +48,9 @@ public class CardService extends HostApduService {
     // Format: [Class | Instruction | Parameter 1 | Parameter 2]
     private static final String SELECT_APDU_HEADER = "00A40400";
     // "OK" status word sent in response to SELECT AID command (0x9000)
-    public static final byte[] SELECT_OK_SW = HexStringToByteArray("9000");
-    // "UNKNOWN" status word sent in response to invalid APDU command (0x0000)
-    private static final byte[] UNKNOWN_CMD_SW = HexStringToByteArray("0000");
+    public static final byte[] SELECT_OK_SW = new byte[] { (byte) 0x90, 0x00 };// ETSI TS 102 221 10.2.1.1: Normal ending of the command
+    private static final byte[] UNKNOWN_CLA_SW = new byte[] { 0x6E, 0x00 }; // ETSI TS 102 221 10.2.1.5: Class not supported
+    private static final byte[] UNKNOWN_INS_SW = new byte[] { 0x6D, 0x00 }; // ETSI TS 102 221 10.2.1.5: Instruction code not supported or invalid
     private static final byte[] SELECT_APDU = BuildSelectApdu(SAMPLE_LOYALTY_CARD_AID);
     private IsoAppletHandler mIsoAppletHandler;
 
@@ -73,6 +75,12 @@ public class CardService extends HostApduService {
         }
     }
 
+    @Override
+    public void onDestroy() {
+        Log.i(TAG, "onDestroy()");
+        super.onDestroy();
+    }
+
     /**
      * This method will be called when a command APDU has been received from a remote device. A
      * response APDU can be provided directly by returning a byte-array in this method. In general
@@ -95,6 +103,7 @@ public class CardService extends HostApduService {
     // BEGIN_INCLUDE(processCommandApdu)
     @Override
     public byte[] processCommandApdu(byte[] commandApdu, Bundle extras) {
+        byte[] response = null;
         Log.i(TAG, "Received APDU: " + ByteArrayToHexString(commandApdu));
         // If the APDU matches the SELECT AID command for this service,
         // send the loyalty card account number, followed by a SELECT_OK status trailer (0x9000).
@@ -102,24 +111,32 @@ public class CardService extends HostApduService {
             String account = AccountStorage.GetAccount(this);
             byte[] accountBytes = account.getBytes();
             Log.i(TAG, "Sending account number: " + account);
-            return ConcatArrays(accountBytes, SELECT_OK_SW);
+            response = ConcatArrays(accountBytes, SELECT_OK_SW);
         } else if (commandApdu[0] == (byte) 0x00) { // CLA
-            byte command = commandApdu[1];
-            Log.i(TAG, "got command: " + command);
-            switch (command) {
-                case 0x10:
+            byte ins = commandApdu[1];
+            Log.i(TAG, "got instruction: " + ins);
+            switch (ins) {
+                case 0x55:
+                    if (mIsoAppletHandler == null) {
+                        mIsoAppletHandler = new IsoAppletHandler(this);
+                    } else {
+                        try {
+                            response = mIsoAppletHandler.responseAPDU();
+                        } catch (CertificateEncodingException e) {
+                            e.printStackTrace();
+                        } catch (NoSuchAlgorithmException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    break;
+                default:
+                    response = UNKNOWN_INS_SW;
                     break;
             }
-            byte[] response = null;
-            if (mIsoAppletHandler == null) {
-                mIsoAppletHandler = new IsoAppletHandler(this);
-            } else {
-                response = mIsoAppletHandler.responseAPDU();
-            }
-            return response;
         } else {
-            return UNKNOWN_CMD_SW;
+            response = UNKNOWN_CLA_SW;
         }
+        return response;
     }
     // END_INCLUDE(processCommandApdu)
 

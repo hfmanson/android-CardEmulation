@@ -118,7 +118,10 @@ public class CardService extends HostApduService {
             switch (ins) {
                 case 0x55:
                     if (mIsoAppletHandler == null) {
-                        mIsoAppletHandler = new IsoAppletHandler(this);
+                        int dataLength = commandApdu[4];
+                        byte[] fingerprint = new byte[dataLength];
+                        System.arraycopy(commandApdu, 5, fingerprint, 0, dataLength);
+                        mIsoAppletHandler = new IsoAppletHandler(this, fingerprint);
                     } else {
                         try {
                             response = mIsoAppletHandler.responseAPDU();

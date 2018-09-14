@@ -27,6 +27,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateParsingException;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.List;
 
@@ -44,10 +45,13 @@ public class IsoAppletHandler implements SEService.CallBack {
     private X509Certificate mCaCertificate;
     private int mLockCertificateCount;
     private X509Certificate[] mLockCertificates;
+    private byte[] mLockFingerprint;
+
     public static final String KEYSTORE_FILENAME = "keystore";
 
-    public IsoAppletHandler(Context context) {
-
+    public IsoAppletHandler(Context context, byte[] lockFingerprint) {
+        mLockFingerprint = lockFingerprint;
+        Log.i(TAG, "lock fingerprint: " + CardService.ByteArrayToHexString(lockFingerprint));
         mSmartcardIO = new SmartcardIO();
         mLockCertificates = new X509Certificate[10];
         mLockCertificateCount = 0;
@@ -141,7 +145,14 @@ public class IsoAppletHandler implements SEService.CallBack {
             printAliases(ks);
             mKeyCertificate = (X509Certificate) ks.getCertificate("keycert");
             mCaCertificate = (X509Certificate) ks.getCertificate("CA");
-            mCardService.sendResponseApdu(responseAPDU());
+            mLockCertificates[0] = (X509Certificate) ks.getCertificate("slot1");
+            if (Arrays.equals(getThumbprint(mLockCertificates[0]), mLockFingerprint)) {
+                Log.i(TAG, "Lock certificate fingerprint match OK");
+                mCardService.sendResponseApdu(responseAPDU());
+            } else {
+                Log.i(TAG, "Lock certificate fingerprint does not match");
+                mCardService.sendResponseApdu(new byte[] { 0x69, (byte) 0x82 });
+            }
             //mLockCertificates[mLockCertificateCount++] = certificate;
             //byte[] thumbprint = getThumbprint(certificate);
             //Log.i(TAG, SmartcardIO.hex(thumbprint));

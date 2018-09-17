@@ -20,6 +20,7 @@ import android.nfc.cardemulation.HostApduService;
 import android.os.Bundle;
 import com.example.android.common.logger.Log;
 
+import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateEncodingException;
 import java.util.Arrays;
@@ -53,6 +54,7 @@ public class CardService extends HostApduService {
     private static final byte[] UNKNOWN_INS_SW = new byte[] { 0x6D, 0x00 }; // ETSI TS 102 221 10.2.1.5: Instruction code not supported or invalid
     private static final byte[] SELECT_APDU = BuildSelectApdu(SAMPLE_LOYALTY_CARD_AID);
     private IsoAppletHandler mIsoAppletHandler;
+    private byte[] mSignature;
 
     @Override
     public void onCreate() {
@@ -132,6 +134,44 @@ public class CardService extends HostApduService {
                         }
                     }
                     break;
+                case 0x56:
+                    if (mIsoAppletHandler != null) {
+                        try {
+                            int dataLength = commandApdu[4] & 0xff;
+                            byte[] challenge = new byte[dataLength];
+                            System.arraycopy(commandApdu, 5, challenge, 0, dataLength);
+                            int responseLength = commandApdu[5 + dataLength] & 0xFF;
+                            Log.i(TAG, "challenge: " + ByteArrayToHexString(challenge));
+                            mSignature = mIsoAppletHandler.sign(challenge);
+                            if (responseLength == 0) {
+                                responseLength = mSignature.length;
+                                if (responseLength > 0x100) {
+                                    responseLength = 0x100;
+                                }
+                            }
+                            Log.i(TAG, "responseLength: " + responseLength);
+                            Log.i(TAG, "signature: " + ByteArrayToHexString(mSignature));
+                            response = ConcatArrays(Arrays.copyOf(mSignature, responseLength), CardService.SELECT_OK_SW);
+                            Log.i(TAG, "response: " + ByteArrayToHexString(response));
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    } else {
+                        response = UNKNOWN_INS_SW;
+                    }
+                    break;
+                case 0x57:
+                    if (mSignature != null) {
+                        int p1 = commandApdu[2] & 0xff;
+                        int p2 = commandApdu[3] & 0xff;
+                        int responseLength = commandApdu[4] & 0xFF;
+                        int offset = p1 << 8 | p2;
+                        response = ConcatArrays(Arrays.copyOfRange(mSignature, offset, offset + responseLength), CardService.SELECT_OK_SW);
+                    } else {
+                        response = UNKNOWN_INS_SW;
+                    }
+                    break;
+
                 default:
                     response = UNKNOWN_INS_SW;
                     break;

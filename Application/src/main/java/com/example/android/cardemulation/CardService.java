@@ -21,9 +21,13 @@ import android.os.Bundle;
 import com.example.android.common.logger.Log;
 
 import java.io.IOException;
+import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.security.SignatureException;
 import java.security.cert.CertificateEncodingException;
 import java.util.Arrays;
+
+import nl.mansoft.smartcardio.CardException;
 
 /**
  * This is a sample APDU Service which demonstrates how to interface with the card emulation support
@@ -53,13 +57,20 @@ public class CardService extends HostApduService {
     private static final byte[] UNKNOWN_CLA_SW = new byte[] { 0x6E, 0x00 }; // ETSI TS 102 221 10.2.1.5: Class not supported
     private static final byte[] UNKNOWN_INS_SW = new byte[] { 0x6D, 0x00 }; // ETSI TS 102 221 10.2.1.5: Instruction code not supported or invalid
     private static final byte[] SELECT_APDU = BuildSelectApdu(SAMPLE_LOYALTY_CARD_AID);
+    private static final int CLA_CHAINING_MASK = 0x10;
     private IsoAppletHandler mIsoAppletHandler;
     private byte[] mSignature;
+    private int mResponseLength;
+    private ApduResponse mApduResponse;
+    private byte[] mPayload;
+    private int mPayloadOffset;
 
     @Override
     public void onCreate() {
         super.onCreate();
         Log.i(TAG, "onCreate()");
+        mPayload = new byte[1024];
+        mPayloadOffset = 0;
     }
     /**
      * Called if the connection to the NFC card is lost, in order to let the application know the
@@ -83,6 +94,14 @@ public class CardService extends HostApduService {
         super.onDestroy();
     }
 
+    public void sendResponse(byte[] sw, byte[] data) {
+        if (data == null) {
+            sendResponseApdu(sw);
+        } else {
+            byte[] response = data;
+            sendResponseApdu(ConcatArrays(response, sw));
+        }
+    }
     /**
      * This method will be called when a command APDU has been received from a remote device. A
      * response APDU can be provided directly by returning a byte-array in this method. In general
@@ -114,71 +133,82 @@ public class CardService extends HostApduService {
             byte[] accountBytes = account.getBytes();
             Log.i(TAG, "Sending account number: " + account);
             response = ConcatArrays(accountBytes, SELECT_OK_SW);
-        } else if (commandApdu[0] == (byte) 0x00) { // CLA
-            byte ins = commandApdu[1];
-            Log.i(TAG, "got instruction: " + ins);
-            switch (ins) {
-                case 0x55:
-                    if (mIsoAppletHandler == null) {
-                        int dataLength = commandApdu[4];
-                        byte[] fingerprint = new byte[dataLength];
-                        System.arraycopy(commandApdu, 5, fingerprint, 0, dataLength);
-                        mIsoAppletHandler = new IsoAppletHandler(this, fingerprint);
-                    } else {
-                        try {
-                            response = mIsoAppletHandler.responseAPDU();
-                        } catch (CertificateEncodingException e) {
-                            e.printStackTrace();
+        } else if ((commandApdu[0] & ~CLA_CHAINING_MASK) == (byte) 0x00) { // CLA
+            int ins = commandApdu[1] & 0xff;
+            int dataLength = commandApdu[4] & 0xff;
+            if (ins == 0x55 || ins == 0x56) {
+                System.arraycopy(commandApdu, 5, mPayload, mPayloadOffset, dataLength);
+                mPayloadOffset += dataLength;
+            }
+            if ((commandApdu[0] & CLA_CHAINING_MASK) == (byte) 0x00) {
+                switch (ins) {
+                    case 0x55:
+                        if (mIsoAppletHandler == null) {
+                            byte[] fingerprint = new byte[mPayloadOffset];
+                            System.arraycopy(mPayload, 0, fingerprint, 0, mPayloadOffset);
+                            mIsoAppletHandler = new IsoAppletHandler(this, fingerprint);
+                        } else {
+                            Log.e(TAG, "Never reached??");
+                        }
+                        mPayloadOffset = 0;
+                        break;
+                    case 0x56:
+                        if (mIsoAppletHandler != null) {
+                            try {
+                                byte[] challenge = new byte[128];
+                                System.arraycopy(mPayload, 0, challenge, 0, 128);
+                                Log.i(TAG, "challenge: " + ByteArrayToHexString(challenge));
+                                int slotSignatureLength = mPayloadOffset - 128;
+                                byte[] slotSignature = new byte[slotSignatureLength];
+                                System.arraycopy(mPayload, 128, slotSignature, 0, slotSignatureLength);
+                                Log.i(TAG, "slot signature: " + ByteArrayToHexString(slotSignature));
+                                boolean slotSignatureOK = mIsoAppletHandler.verify(slotSignature);
+                                Log.i(TAG, "slot signature " + (slotSignatureOK ? "OK" : "INVALID"));
+                                mSignature = mIsoAppletHandler.sign(challenge);
+                                int responseLength = commandApdu[5 + dataLength] & 0xFF;
+                                if (responseLength == 0) {
+                                    responseLength = mSignature.length;
+                                    if (responseLength > 0x100) {
+                                        responseLength = 0x100;
+                                    }
+                                }
+                                Log.i(TAG, "responseLength: " + responseLength);
+                                mResponseLength = responseLength;
+                                Log.i(TAG, "signature: " + ByteArrayToHexString(mSignature));
+                                mApduResponse = new ApduResponse(mSignature, responseLength);
+                                //response = ConcatArrays(Arrays.copyOf(mSignature, responseLength), new byte[] { 0x61,(byte) (0x100 - mResponseLength) });
+                                response = mApduResponse.getResponse();
+                            } catch (CardException e) {
+                                e.printStackTrace();
                         } catch (NoSuchAlgorithmException e) {
                             e.printStackTrace();
-                        }
-                    }
-                    break;
-                case 0x56:
-                    if (mIsoAppletHandler != null) {
-                        try {
-                            int dataLength = commandApdu[4] & 0xff;
-                            byte[] challenge = new byte[dataLength];
-                            System.arraycopy(commandApdu, 5, challenge, 0, dataLength);
-                            int responseLength = commandApdu[5 + dataLength] & 0xFF;
-                            Log.i(TAG, "challenge: " + ByteArrayToHexString(challenge));
-                            mSignature = mIsoAppletHandler.sign(challenge);
-                            if (responseLength == 0) {
-                                responseLength = mSignature.length;
-                                if (responseLength > 0x100) {
-                                    responseLength = 0x100;
-                                }
-                            }
-                            Log.i(TAG, "responseLength: " + responseLength);
-                            Log.i(TAG, "signature: " + ByteArrayToHexString(mSignature));
-                            response = ConcatArrays(Arrays.copyOf(mSignature, responseLength), CardService.SELECT_OK_SW);
-                            Log.i(TAG, "response: " + ByteArrayToHexString(response));
-                        } catch (IOException e) {
+                        } catch (SignatureException e) {
                             e.printStackTrace();
+                        } catch (InvalidKeyException e) {
+                            e.printStackTrace();
+                            }
+                        } else {
+                            Log.e(TAG, "mIsoAppletHandler is null");
+                            response = UNKNOWN_INS_SW;
                         }
-                    } else {
+                        mPayloadOffset = 0;
+                        break;
+                    case 0xc0:
+                        //response = ConcatArrays(Arrays.copyOfRange(mSignature, mResponseLength, 0x100), CardService.SELECT_OK_SW);
+                        response = mApduResponse.getResponse();
+                        mPayloadOffset = 0;
+                        break;
+                    default:
                         response = UNKNOWN_INS_SW;
-                    }
-                    break;
-                case 0x57:
-                    if (mSignature != null) {
-                        int p1 = commandApdu[2] & 0xff;
-                        int p2 = commandApdu[3] & 0xff;
-                        int responseLength = commandApdu[4] & 0xFF;
-                        int offset = p1 << 8 | p2;
-                        response = ConcatArrays(Arrays.copyOfRange(mSignature, offset, offset + responseLength), CardService.SELECT_OK_SW);
-                    } else {
-                        response = UNKNOWN_INS_SW;
-                    }
-                    break;
-
-                default:
-                    response = UNKNOWN_INS_SW;
-                    break;
+                        break;
+                }
+            } else {
+                response = SELECT_OK_SW;
             }
         } else {
             response = UNKNOWN_CLA_SW;
         }
+        Log.i(TAG, "response: " +  (response == null ? "(null)" : ByteArrayToHexString(response)));
         return response;
     }
     // END_INCLUDE(processCommandApdu)

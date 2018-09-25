@@ -20,11 +20,9 @@ import android.nfc.cardemulation.HostApduService;
 import android.os.Bundle;
 import com.example.android.common.logger.Log;
 
-import java.io.IOException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SignatureException;
-import java.security.cert.CertificateEncodingException;
 import java.util.Arrays;
 
 import nl.mansoft.smartcardio.CardException;
@@ -53,9 +51,10 @@ public class CardService extends HostApduService {
     // Format: [Class | Instruction | Parameter 1 | Parameter 2]
     private static final String SELECT_APDU_HEADER = "00A40400";
     // "OK" status word sent in response to SELECT AID command (0x9000)
-    public static final byte[] SELECT_OK_SW = new byte[] { (byte) 0x90, 0x00 };// ETSI TS 102 221 10.2.1.1: Normal ending of the command
-    private static final byte[] UNKNOWN_CLA_SW = new byte[] { 0x6E, 0x00 }; // ETSI TS 102 221 10.2.1.5: Class not supported
-    private static final byte[] UNKNOWN_INS_SW = new byte[] { 0x6D, 0x00 }; // ETSI TS 102 221 10.2.1.5: Instruction code not supported or invalid
+    public static final byte[] SW_NO_ERROR = new byte[] { (byte) 0x90, 0x00 };// ETSI TS 102 221 10.2.1.1: Normal ending of the command
+    public static final byte[] SW_UNKNOWN_CLA = new byte[] { 0x6E, 0x00 }; // ETSI TS 102 221 10.2.1.5: Class not supported
+    public static final byte[] SW_UNKNOWN_INS = new byte[] { 0x6D, 0x00 }; // ETSI TS 102 221 10.2.1.5: Instruction code not supported or invalid
+    public static final byte[] SW_WRONG_LENGTH = new byte[] { 0x67, 0x00 }; // ETSI TS 102 221 10.2.1.5: Instruction code not supported or invalid
     private static final byte[] SELECT_APDU = BuildSelectApdu(SAMPLE_LOYALTY_CARD_AID);
     private static final int CLA_CHAINING_MASK = 0x10;
     private IsoAppletHandler mIsoAppletHandler;
@@ -132,81 +131,87 @@ public class CardService extends HostApduService {
             String account = AccountStorage.GetAccount(this);
             byte[] accountBytes = account.getBytes();
             Log.i(TAG, "Sending account number: " + account);
-            response = ConcatArrays(accountBytes, SELECT_OK_SW);
+            response = ConcatArrays(accountBytes, SW_NO_ERROR);
         } else if ((commandApdu[0] & ~CLA_CHAINING_MASK) == (byte) 0x00) { // CLA
             int ins = commandApdu[1] & 0xff;
             int dataLength = commandApdu[4] & 0xff;
-            if (ins == 0x55 || ins == 0x56) {
-                System.arraycopy(commandApdu, 5, mPayload, mPayloadOffset, dataLength);
-                mPayloadOffset += dataLength;
-            }
-            if ((commandApdu[0] & CLA_CHAINING_MASK) == (byte) 0x00) {
-                switch (ins) {
-                    case 0x55:
-                        if (mIsoAppletHandler == null) {
-                            byte[] fingerprint = new byte[mPayloadOffset];
-                            System.arraycopy(mPayload, 0, fingerprint, 0, mPayloadOffset);
-                            mIsoAppletHandler = new IsoAppletHandler(this, fingerprint);
-                        } else {
-                            Log.e(TAG, "Never reached??");
-                        }
-                        mPayloadOffset = 0;
-                        break;
-                    case 0x56:
-                        if (mIsoAppletHandler != null) {
-                            try {
-                                byte[] challenge = new byte[128];
-                                System.arraycopy(mPayload, 0, challenge, 0, 128);
-                                Log.i(TAG, "challenge: " + ByteArrayToHexString(challenge));
-                                int slotSignatureLength = mPayloadOffset - 128;
-                                byte[] slotSignature = new byte[slotSignatureLength];
-                                System.arraycopy(mPayload, 128, slotSignature, 0, slotSignatureLength);
-                                Log.i(TAG, "slot signature: " + ByteArrayToHexString(slotSignature));
-                                boolean slotSignatureOK = mIsoAppletHandler.verify(slotSignature);
-                                Log.i(TAG, "slot signature " + (slotSignatureOK ? "OK" : "INVALID"));
-                                mSignature = mIsoAppletHandler.sign(challenge);
-                                int responseLength = commandApdu[5 + dataLength] & 0xFF;
-                                if (responseLength == 0) {
-                                    responseLength = mSignature.length;
-                                    if (responseLength > 0x100) {
-                                        responseLength = 0x100;
-                                    }
-                                }
-                                Log.i(TAG, "responseLength: " + responseLength);
-                                mResponseLength = responseLength;
-                                Log.i(TAG, "signature: " + ByteArrayToHexString(mSignature));
-                                mApduResponse = new ApduResponse(mSignature, responseLength);
-                                //response = ConcatArrays(Arrays.copyOf(mSignature, responseLength), new byte[] { 0x61,(byte) (0x100 - mResponseLength) });
-                                response = mApduResponse.getResponse();
-                            } catch (CardException e) {
-                                e.printStackTrace();
-                        } catch (NoSuchAlgorithmException e) {
-                            e.printStackTrace();
-                        } catch (SignatureException e) {
-                            e.printStackTrace();
-                        } catch (InvalidKeyException e) {
-                            e.printStackTrace();
+            if (dataLength <= commandApdu.length - 5) {
+                if (ins == 0x55 || ins == 0x56) {
+                        System.arraycopy(commandApdu, 5, mPayload, mPayloadOffset, dataLength);
+                        mPayloadOffset += dataLength;
+                }
+                if ((commandApdu[0] & CLA_CHAINING_MASK) == (byte) 0x00) {
+                    switch (ins) {
+                        case 0x55:
+                            if (mIsoAppletHandler == null) {
+                                byte[] fingerprint = new byte[mPayloadOffset];
+                                System.arraycopy(mPayload, 0, fingerprint, 0, mPayloadOffset);
+                                mIsoAppletHandler = new IsoAppletHandler(this, fingerprint);
+                            } else {
+                                Log.e(TAG, "Never reached??");
                             }
-                        } else {
-                            Log.e(TAG, "mIsoAppletHandler is null");
-                            response = UNKNOWN_INS_SW;
-                        }
-                        mPayloadOffset = 0;
-                        break;
-                    case 0xc0:
-                        //response = ConcatArrays(Arrays.copyOfRange(mSignature, mResponseLength, 0x100), CardService.SELECT_OK_SW);
-                        response = mApduResponse.getResponse();
-                        mPayloadOffset = 0;
-                        break;
-                    default:
-                        response = UNKNOWN_INS_SW;
-                        break;
+                            mPayloadOffset = 0;
+                            break;
+                        case 0x56:
+                            if (mIsoAppletHandler != null) {
+                                try {
+                                    byte[] challenge = new byte[128];
+                                    System.arraycopy(mPayload, 0, challenge, 0, 128);
+                                    Log.i(TAG, "challenge: " + ByteArrayToHexString(challenge));
+                                    int slotSignatureLength = mPayloadOffset - 128;
+                                    byte[] slotSignature = new byte[slotSignatureLength];
+                                    System.arraycopy(mPayload, 128, slotSignature, 0, slotSignatureLength);
+                                    Log.i(TAG, "slot signature: " + ByteArrayToHexString(slotSignature));
+                                    boolean slotSignatureOK = mIsoAppletHandler.verify(slotSignature);
+                                    Log.i(TAG, "slot signature " + (slotSignatureOK ? "OK" : "INVALID"));
+                                    mSignature = mIsoAppletHandler.sign(challenge);
+                                    int responseLength = commandApdu[5 + dataLength] & 0xFF;
+                                    if (responseLength == 0) {
+                                        responseLength = mSignature.length;
+                                        if (responseLength > 0x100) {
+                                            responseLength = 0x100;
+                                        }
+                                    }
+                                    Log.i(TAG, "responseLength: " + responseLength);
+                                    mResponseLength = responseLength;
+                                    Log.i(TAG, "signature: " + ByteArrayToHexString(mSignature));
+                                    mApduResponse = new ApduResponse(mSignature, responseLength);
+                                    //response = ConcatArrays(Arrays.copyOf(mSignature, responseLength), new byte[] { 0x61,(byte) (0x100 - mResponseLength) });
+                                    response = mApduResponse.getResponse();
+                                } catch (CardException e) {
+                                    e.printStackTrace();
+                                } catch (NoSuchAlgorithmException e) {
+                                    e.printStackTrace();
+                                } catch (SignatureException e) {
+                                    e.printStackTrace();
+                                } catch (InvalidKeyException e) {
+                                    e.printStackTrace();
+                                }
+                            } else {
+                                Log.e(TAG, "mIsoAppletHandler is null");
+                                response = SW_UNKNOWN_INS;
+                            }
+                            mPayloadOffset = 0;
+                            break;
+                        case 0xc0:
+                            //response = ConcatArrays(Arrays.copyOfRange(mSignature, mResponseLength, 0x100), CardService.SW_NO_ERROR);
+                            response = mApduResponse.getResponse();
+                            mPayloadOffset = 0;
+                            break;
+                        default:
+                            response = SW_UNKNOWN_INS;
+                            break;
+                    }
+
+                } else {
+                    response = SW_NO_ERROR;
                 }
             } else {
-                response = SELECT_OK_SW;
+                Log.e(TAG, "Wrong length");
+                response = SW_WRONG_LENGTH;
             }
         } else {
-            response = UNKNOWN_CLA_SW;
+            response = SW_UNKNOWN_CLA;
         }
         Log.i(TAG, "response: " +  (response == null ? "(null)" : ByteArrayToHexString(response)));
         return response;

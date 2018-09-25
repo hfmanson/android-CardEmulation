@@ -198,7 +198,7 @@ public class IsoAppletHandler implements SEService.CallBack {
                 Log.i(TAG, "Lock certificate fingerprint match OK");
                 byte[] data = responseAPDU();
                 encrypt(data);
-                mCardService.sendResponse(CardService.SELECT_OK_SW, data);
+                mCardService.sendResponse(CardService.SW_NO_ERROR, data);
             } else {
                 Log.i(TAG, "Lock certificate fingerprint does not match");
                 mCardService.sendResponse(new byte[] { 0x69, (byte) 0x82 }, null);

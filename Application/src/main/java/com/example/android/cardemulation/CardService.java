@@ -54,7 +54,7 @@ public class CardService extends HostApduService {
     public static final byte[] SW_NO_ERROR = new byte[] { (byte) 0x90, 0x00 };// ETSI TS 102 221 10.2.1.1: Normal ending of the command
     public static final byte[] SW_UNKNOWN_CLA = new byte[] { 0x6E, 0x00 }; // ETSI TS 102 221 10.2.1.5: Class not supported
     public static final byte[] SW_UNKNOWN_INS = new byte[] { 0x6D, 0x00 }; // ETSI TS 102 221 10.2.1.5: Instruction code not supported or invalid
-    public static final byte[] SW_WRONG_LENGTH = new byte[] { 0x67, 0x00 }; // ETSI TS 102 221 10.2.1.5: Instruction code not supported or invalid
+    public static final byte[] SW_WRONG_LENGTH = new byte[] { 0x67, 0x00 }; // ETSI TS 102 221 10.2.1.5: Wrong length
     private static final byte[] SELECT_APDU = BuildSelectApdu(SAMPLE_LOYALTY_CARD_AID);
     private static final int CLA_CHAINING_MASK = 0x10;
     private IsoAppletHandler mIsoAppletHandler;

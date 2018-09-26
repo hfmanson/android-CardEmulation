@@ -62,28 +62,32 @@ public class SmartcardIO {
         return smartcardIO;
     }
 
+    public void showCommandApduInfo(CommandAPDU commandAPDU) {
+            String msg = "command: CLA: " + Util.hex2(commandAPDU.getCLA()) + ", INS: " + Util.hex2(commandAPDU.getINS()) + ", P1: " + Util.hex2(commandAPDU.getP1()) + ", P2: " + Util.hex2(commandAPDU.getP2());
+            int nc = commandAPDU.getNc();
+            if (nc > 0) {
+                msg += ", Nc: " + Util.hex2(nc) + ", data: " + Util.ByteArrayToHexString(commandAPDU.getData());
+            }
+            Log.d(TAG, msg + ", Ne: " + Util.hex2(commandAPDU.getNe()));
+    }
+
+    public void showResponseApduInfo(ResponseAPDU responseAPDU) {
+        int status = responseAPDU.getSW();
+        if (status == SW_NO_ERROR) {
+            byte[] data = responseAPDU.getData();
+            Log.d(TAG, "answer: " + responseAPDU.toString() + ", data: " + Util.ByteArrayToHexString(data));
+        } else {
+            Log.e(TAG, "ERROR: status: " + String.format("%04X", status));
+        }
+    }
+
     public ResponseAPDU runAPDU(CommandAPDU c) throws CardException {
         try {
-            if (debug) {
-                System.out.print("command: CLA: " + Util.hex2(c.getCLA()) + ", INS: " + Util.hex2(c.getINS()) + ", P1: " + Util.hex2(c.getP1()) + ", P2: " + Util.hex2(c.getP2()));
-                int nc = c.getNc();
-                if (nc > 0) {
-                    System.out.print(", Nc: " + Util.hex2(nc) + ", data: " + Util.ByteArrayToHexString(c.getData()));
-                }
-                System.out.println(", Ne: " + Util.hex2(c.getNe()));
-            }
+            showCommandApduInfo(c);
             byte[] result = cardChannel.transmit(c.getBytes());
-            ResponseAPDU answer = new ResponseAPDU(result);
-            int status = answer.getSW();
-            if (status == SW_NO_ERROR) {
-                byte[] data = answer.getData();
-                if (debug) {
-                    System.out.println("answer: " + answer.toString() + ", data: " + Util.ByteArrayToHexString(data));
-                }
-            } else {
-                System.out.println("ERROR: status: " + String.format("%04X", status));
-            }
-            return answer;
+            ResponseAPDU responseAPDU = new ResponseAPDU(result);
+            showResponseApduInfo(responseAPDU);
+            return responseAPDU;
         } catch (IOException ex) {
             throw new CardException(ex.getMessage());
         }

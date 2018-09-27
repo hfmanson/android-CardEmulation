@@ -93,6 +93,24 @@ public class SmartcardIO {
         }
     }
 
+    public void runAPDU(final CommandAPDU c, final TransmitCallback callback) throws CardException {
+        final byte[] bytes = c.getBytes();
+        Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    byte[] result = cardChannel.transmit(bytes);
+                    ResponseAPDU responseAPDU = new ResponseAPDU(result);
+                    showResponseApduInfo(responseAPDU);
+                    callback.callBack(responseAPDU);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+        thread.start();
+    }
+
     public void setup(Context context, SEService.CallBack callBack) throws IOException {
         mSeService = new SEService(context, callBack);
     }

@@ -1,2 +1,2 @@
-include ':isoappletprovider'
-include 'Application'
+include ':isoappletprovider-debug'
+include 'Application', ':isoappletprovider-debug'

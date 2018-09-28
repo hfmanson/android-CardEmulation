@@ -9,7 +9,7 @@
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/Application" />
-            <option value="$PROJECT_DIR$/isoappletprovider" />
+            <option value="$PROJECT_DIR$/isoappletprovider-debug" />
           </set>
         </option>
         <option name="resolveModulePerSourceSet" value="false" />

@@ -1,44 +1,42 @@
 /*
-* Copyright 2013 The Android Open Source Project
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Copyright 2013 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 /*
-* Copyright (C) 2013 The Android Open Source Project
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*      http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Copyright (C) 2013 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.example.android.cardemulation.tests;
 
 import com.example.android.cardemulation.*;
 
 import android.test.ActivityInstrumentationTestCase2;
 
-import java.io.IOException;
-
 /**
-* Tests for CardEmulation sample.
-*/
+ * Tests for CardEmulation sample.
+ */
 public class SampleTests extends ActivityInstrumentationTestCase2<MainActivity> {
 
     private MainActivity mTestActivity;
@@ -58,12 +56,12 @@ public class SampleTests extends ActivityInstrumentationTestCase2<MainActivity> 
         // All other fields are null or empty.
         mTestActivity = getActivity();
         mTestFragment = (CardEmulationFragment)
-            mTestActivity.getSupportFragmentManager().getFragments().get(1);
+                mTestActivity.getSupportFragmentManager().getFragments().get(1);
     }
 
     /**
-    * Test if the test fixture has been set up correctly.
-    */
+     * Test if the test fixture has been set up correctly.
+     */
     public void testPreconditions() {
         //Try to add a message to add context to your assertions. These messages will be shown if
         //a tests fails and make it easy to understand why a test failed
@@ -94,7 +92,7 @@ public class SampleTests extends ActivityInstrumentationTestCase2<MainActivity> 
     /**
      * Verify that account number is returned in response to APDU.
      */
-    public void testRequestAccoutNumber() {
+    public void testRequestAccountNumber() {
         AccountStorage.SetAccount(this.getActivity(), "1234");
         final byte[] command = {(byte) 0x00, (byte) 0xA4, (byte) 0x04, (byte) 0x00, (byte) 0x05,
                 (byte) 0xF2, (byte) 0x22, (byte) 0x22, (byte) 0x22, (byte) 0x22};
@@ -112,13 +110,14 @@ public class SampleTests extends ActivityInstrumentationTestCase2<MainActivity> 
 
 
     /**
-     * Verify that account number is returned in response to APDU.
+     * Verify that error code is returned in response to an invalid command.
      */
     public void testInvalidCommand() {
         AccountStorage.SetAccount(this.getActivity(), "1234");
+        // command uses invalid CLA: 0x01
         final byte[] command = {(byte) 0x01, (byte) 0xA4, (byte) 0x04, (byte) 0x00, (byte) 0x05,
                 (byte) 0xF2, (byte) 0x22, (byte) 0x22, (byte) 0x22, (byte) 0x22};
-        final byte[] expectedResponse = {(byte) 0x00, (byte) 0x00};
+        final byte[] expectedResponse = {(byte) 0x6E, (byte) 0x00}; // Class not supported
         final CardService cs = new CardService();
         final byte[] output = cs.processCommandApdu(command, null);
 
@@ -167,16 +166,5 @@ public class SampleTests extends ActivityInstrumentationTestCase2<MainActivity> 
         for (int i = 0; i < expectedResult.length; i++) {
             assertEquals(expectedResult[i], result[i]);
         }
-    }
-
-    public void testPKCS15() throws IOException{
-//        final ApplicationFactoryImpl applicationFactory = new ApplicationFactoryImpl();
-
-//        List<Application> apps = applicationFactory.listApplications(token);
-//        assertNotNull(apps);
-//        assertEquals(1,apps.size());
-//        Application app = apps.get(0);
-//        assertEquals(AIDs.PKCS15_AID, app.getAID());
-        new IsoAppletHandler(mTestActivity);
     }
 }

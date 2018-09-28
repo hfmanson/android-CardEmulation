@@ -1,2 +1,1 @@
-include ':isoappletprovider-debug'
 include 'Application', ':isoappletprovider-debug'

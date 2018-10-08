@@ -6,7 +6,7 @@ buildscript {
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:3.1.4'
+        classpath 'com.android.tools.build:gradle:3.2.0'
     }
 }
 
@@ -26,11 +26,11 @@ dependencies {
     implementation 'com.android.support:support-v13:21.0.3'
     implementation 'com.android.support:cardview-v7:21.0.3'
     implementation 'com.android.support:appcompat-v7:21.0.3'
-    implementation project(':isoappletprovider-debug')
     implementation 'org.bouncycastle:bcprov:jdk15-138'
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'com.android.support.test:runner:1.0.2'
     androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+    implementation project(':isoappletprovider-debug')
 }
 
 // The sample build uses multiple directories to
@@ -43,8 +43,6 @@ List<String> dirs = [
 
 android {
     compileSdkVersion 'Giesecke Devrient GmbH:Open Mobile API:21'
-
-    buildToolsVersion "27.0.3"
 
     defaultConfig {
         minSdkVersion 19

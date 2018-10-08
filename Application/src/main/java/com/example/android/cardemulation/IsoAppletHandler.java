@@ -52,23 +52,17 @@ public class IsoAppletHandler implements SEService.CallBack {
     private byte[] mRandom;
     private Provider mProvider;
     private KeyStore mKeystore;
-    private ApduResponse apduResponse;
 
     public static final String KEYSTORE_FILENAME = "keystore";
 
     public IsoAppletHandler(Context context, byte[] lockFingerprint) {
         mLockFingerprint = lockFingerprint;
         Log.i(TAG, "lock fingerprint: " + CardService.ByteArrayToHexString(lockFingerprint));
-        mSmartcardIO = SmartcardIO.getInstance();
+        mSmartcardIO = new SmartcardIO(context, AID_ISOAPPLET, this);
+        mSmartcardIO.mDebug = true;
         mLockCertificates = new X509Certificate[10];
         mLockCertificateCount = 0;
         mCardService = (CardService) context;
-        try {
-            mSmartcardIO.setup(context, this);
-            mSmartcardIO.setupToken();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
     }
 
     public static byte[] getThumbprint(X509Certificate cert)
@@ -167,9 +161,6 @@ public class IsoAppletHandler implements SEService.CallBack {
     public void serviceConnected(SEService seService) {
         Log.i(TAG, "serviceConnected()");
         try {
-            mSmartcardIO.setSession();
-            mSmartcardIO.openChannel(AID_ISOAPPLET);
-
             mProvider = new SimProvider();
             Security.addProvider(mProvider);
             mKeystore = KeyStore.getInstance("SIM");

@@ -161,6 +161,7 @@ public class IsoAppletHandler implements SEService.CallBack {
     public void serviceConnected(SEService seService) {
         Log.i(TAG, "serviceConnected()");
         try {
+            mSmartcardIO.setSessionAndOpenChannel();
             mProvider = new SimProvider();
             Security.addProvider(mProvider);
             mKeystore = KeyStore.getInstance("SIM");
@@ -199,7 +200,9 @@ public class IsoAppletHandler implements SEService.CallBack {
             //byte[] thumbprint = getThumbprint(certificate);
             //Log.i(TAG, SmartcardIO.hex(thumbprint));
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e(TAG, e.getMessage());
+            mCardService.sendResponse(new byte[] { 0x6F, (byte) 0x00 }, null);
+            //e.printStackTrace();
         }
     }
 
